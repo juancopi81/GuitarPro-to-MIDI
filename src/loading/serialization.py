@@ -5,7 +5,7 @@ from typing import Any
 import guitarpro as gm
 from guitarpro.models import Song
 from music21 import converter
-from music21.stream.base import Score, Stream
+from music21.stream.base import Score
 
 
 class Serializer(ABC):
@@ -38,7 +38,7 @@ class Music21Serializer(Serializer):
     def __init__(self, save_format: str = "midi") -> None:
         self.save_format = save_format
 
-    def dump(self, m21_stream: Stream, save_path: Path) -> None:
+    def dump(self, m21_stream: Score, save_path: Path) -> None:
         m21_stream.write(fmt=self.save_format, fp=save_path)
 
     def load(self, load_path: Path) -> Score:

@@ -40,13 +40,13 @@ def test_guitarpro_serializer_dump():
     for i, (notes, duration) in enumerate(splits):
         new_duration = gm.Duration(value=duration)
         new_beat = gm.Beat(voice,
-                        duration=new_duration,
-                        status=gm.BeatStatus.normal)
+                           duration=new_duration,
+                           status=gm.BeatStatus.normal)
         for value, string in notes:
             new_note = gm.Note(new_beat,
-                            value=value,
-                            string=string,
-                            type=gm.NoteType.normal)
+                               value=value,
+                               string=string,
+                               type=gm.NoteType.normal)
             new_beat.notes.append(new_note)
         voice.beats.append(new_beat)
 
@@ -67,10 +67,16 @@ def test_music21_serializer_load():
 def test_music21_serializer_dump():
     test_folder_path = Path.home()/"GuitarPro-to-MIDI/src/test/test_files"
     m21_serializer = Music21Serializer()
-    m21_stream = stream.Stream()
-    d4_note = note.Note("D4")
-    m21_stream.repeatAppend(d4_note, 4)
+    s = stream.Score()
+    p = stream.Part()
+    m = stream.Measure()
+    m.append(note.Note())
+    p.append(m)
+    s.append(p)
+    s.insert(0, metadata.Metadata())
+    s.metadata.title = 'title'
+    s.metadata.composer = 'composer'
     save_path = test_folder_path/"test_midi_file.mid"
-    m21_serializer.dump(m21_stream=m21_stream, save_path=save_path)
+    m21_serializer.dump(m21_stream=s, save_path=save_path)
     assert save_path.is_file() == True
     os.remove(save_path)
