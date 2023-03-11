@@ -1,8 +1,10 @@
 from pathlib import Path
 
 from pytest import fixture
-from guitarpro.models import Song
+from guitarpro.models import Song, Track
 from music21.stream.base import Score
+from music21.stream import Part
+from music21 import *
 
 from src.loading.serialization import PyGuitarProSerializer
 from src.transforming.guitarprotomusic21convertor import GuitarProToMusic21Convertor
@@ -31,3 +33,13 @@ def test_create_new_m21_score(gp_to_m21_convertor):
     assert type(new_m21_score) == Score
     assert new_m21_score.metadata.title == "Antonio Carlos, Jobim - Engano"
     assert new_m21_score.metadata.composer == "Antonio Carlos, Jobim"
+
+
+def test_create_new_m21_part(gp_to_m21_convertor):
+    gp_song = gp_to_m21_convertor.gp_stream
+    track = gp_song.tracks[0]
+    assert type(gp_song) == Song
+    assert type(track) == Track
+    m21_part = gp_to_m21_convertor._create_m21_part(0, track)
+    assert type(m21_part) == Part
+    assert m21_part.getInstrument().instrumentName == "Electric Guitar"
