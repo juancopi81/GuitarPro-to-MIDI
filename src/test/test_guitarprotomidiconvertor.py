@@ -1,10 +1,8 @@
 from pathlib import Path
 
 from pytest import fixture
-from guitarpro.models import Song, Track
-from music21.stream.base import Score
-from music21.stream import Part
-from music21 import *
+import guitarpro as gm
+import music21 as m21
 
 from src.loading.serialization import PyGuitarProSerializer
 from src.transforming.guitarprotomusic21convertor import GuitarProToMusic21Convertor
@@ -21,7 +19,7 @@ def gp_to_m21_convertor():
 
 def test_guitarpro_to_music21_convertor_init(gp_to_m21_convertor):    
     metadata = gp_to_m21_convertor.metadata
-    assert type(gp_to_m21_convertor.gp_stream) == Song
+    assert type(gp_to_m21_convertor.gp_stream) == gm.models.Song
     assert type(metadata) == dict
     assert metadata["title"] == "Antonio Carlos, Jobim - Engano.gp4"
     assert metadata["artist"] == "Antonio Carlos, Jobim"
@@ -30,7 +28,7 @@ def test_guitarpro_to_music21_convertor_init(gp_to_m21_convertor):
 
 def test_create_new_m21_score(gp_to_m21_convertor):
     new_m21_score = gp_to_m21_convertor._create_new_m21_score()
-    assert type(new_m21_score) == Score
+    assert type(new_m21_score) == m21.stream.Score
     assert new_m21_score.metadata.title == "Antonio Carlos, Jobim - Engano"
     assert new_m21_score.metadata.composer == "Antonio Carlos, Jobim"
 
@@ -38,8 +36,29 @@ def test_create_new_m21_score(gp_to_m21_convertor):
 def test_create_new_m21_part(gp_to_m21_convertor):
     gp_song = gp_to_m21_convertor.gp_stream
     track = gp_song.tracks[0]
-    assert type(gp_song) == Song
-    assert type(track) == Track
+    assert type(gp_song) == gm.models.Song
+    assert type(track) == gm.models.Track
     m21_part = gp_to_m21_convertor._create_m21_part(0, track)
-    assert type(m21_part) == Part
+    assert type(m21_part) == m21.stream.Part
     assert m21_part.getInstrument().instrumentName == "Electric Guitar"
+
+
+
+def test_create_new_m21_measure(gp_to_m21_convertor):
+    gp_song = gp_to_m21_convertor.gp_stream
+    gp_measure = gp_song.tracks[0].measures[0]
+    assert type(gp_measure) == gm.models.Measure
+    m21_measure = gp_to_m21_convertor._create_m21_measure(0, 0, gp_measure)
+    assert type(m21_measure) == m21.stream.Measure
+    assert m21_measure.timeSignature.ratioString == "4/4"
+    m21_tempo = m21_measure.recurse().getElementsByClass(m21.tempo.MetronomeMark)[0]
+    assert m21_tempo.number == 70
+
+
+def test_create_new_m21_voice(gp_to_m21_convertor):
+    gp_song = gp_to_m21_convertor.gp_stream
+    gp_voice = gp_song.tracks[0].measures[0].voices[0]
+    assert type(gp_voice) == gm.models.Voice
+    m21_voice = gp_to_m21_convertor._create_m21_voice(0, gp_voice)
+    assert type(m21_voice) == m21.stream.Voice
+    assert m21_voice.id == "voice_0"
