@@ -31,9 +31,13 @@ class GuitarProToMusic21Convertor:
             # Loop over measure
             for idx_measure, gp_measure in enumerate(track.measures()):
                 m21_measure = self._create_m21_measure(idx_track, idx_measure, gp_measure)
-                # Loop over voices, TODO: beats, and notes
+                # Loop over voices
                 for idx_voice, gp_voice in enumerate(gp_measure):
                     m21_voice = self._create_m21_voice(idx_voice, gp_voice)
+                    # Loop over beats and notes
+                    for idx_beat, gp_beat in enumerate(gp_voice.beats):
+                        for gp_note in gp_beat.notes:
+                            m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note)
         return self.m21_score
 
     def _create_new_m21_score(self):
@@ -89,3 +93,25 @@ class GuitarProToMusic21Convertor:
                           gp_voice: gm.models.Voice) -> m21.stream.Voice:
         m21_voice = m21.stream.Voice(id=f"voice_{idx_voice}")
         return m21_voice
+
+    def _create_m21_note(self,
+                         idx_beat: int,
+                         gp_beat: gm.models.Beat,
+                         gp_note: gm.models.Note) -> m21.stream.Voice:
+        # Retrieve the duration of the beat
+        event_duration = gp_beat.duration.value
+        # Add dot if necessary
+        if gp_beat.duration.isDotted:
+            event_duration.dots = 1
+
+        # Check if type of note = normal note
+        if gp_note.type.value == 1:
+            midi_value = gp_note.realValue
+            m21_note = m21.note.Note(midi_value)
+            m21_note.quarterLength = event_duration
+        # If not, is a rest, to handle tie and dead notes
+        else:
+            m21_note = m21.note.Rest()
+            m21_note.quarterLength = event_duration
+
+        return m21_note

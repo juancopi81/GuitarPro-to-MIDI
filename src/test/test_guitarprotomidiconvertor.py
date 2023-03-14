@@ -62,3 +62,15 @@ def test_create_new_m21_voice(gp_to_m21_convertor):
     m21_voice = gp_to_m21_convertor._create_m21_voice(0, gp_voice)
     assert type(m21_voice) == m21.stream.Voice
     assert m21_voice.id == "voice_0"
+
+
+def test_create_m21_note(gp_to_m21_convertor):
+    gp_song = gp_to_m21_convertor.gp_stream
+    gp_beat = gp_song.tracks[0].measures[0].voices[0].beats[0]
+    gp_note = gp_beat.notes[0]
+    assert type(gp_note) == gm.models.Note
+    m21_note = gp_to_m21_convertor._create_m21_note(0, gp_beat, gp_note)
+    assert type(m21_note) == m21.note.Note
+    assert m21_note.nameWithOctave == "E4"
+    assert m21_note.quarterLength == 8
+    assert m21_note.duration.dots == 0
