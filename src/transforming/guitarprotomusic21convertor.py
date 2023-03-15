@@ -2,6 +2,9 @@ import guitarpro as gm
 import music21 as m21
 
 
+QUARTER_TIME_IN_TICKS = 960
+
+
 class GuitarProToMusic21Convertor:
     """Converts a PyGuitarPro stream into a Music21 Stream"""
 
@@ -29,15 +32,20 @@ class GuitarProToMusic21Convertor:
         for idx_track, track in enumerate(tracks):
             m21_part = self._create_m21_part(idx_track, track)
             # Loop over measure
-            for idx_measure, gp_measure in enumerate(track.measures()):
+            for idx_measure, gp_measure in enumerate(track.measures):
                 m21_measure = self._create_m21_measure(idx_track, idx_measure, gp_measure)
                 # Loop over voices
-                for idx_voice, gp_voice in enumerate(gp_measure):
+                for idx_voice, gp_voice in enumerate(gp_measure.voices):
                     m21_voice = self._create_m21_voice(idx_voice, gp_voice)
                     # Loop over beats and notes
                     for idx_beat, gp_beat in enumerate(gp_voice.beats):
                         for gp_note in gp_beat.notes:
                             m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note)
+                            insert_quarter_note = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
+                            m21_voice.insert(insert_quarter_note, m21_note)
+                    m21_measure.insert(idx_voice, m21_voice)
+                m21_part.insert(idx_measure, m21_measure)
+            self.m21_score.insert(idx_track, m21_part)
         return self.m21_score
 
     def _create_new_m21_score(self):
@@ -77,8 +85,12 @@ class GuitarProToMusic21Convertor:
             m21_measure.append(self.metronome)
             m21_measure.insert(0, m21_time_signature)
         # If time signature is different from last time signature, insert ts to measure
-        elif self.m21_score.recurse().getElementsByClass(m21.meter.TimeSignature)[-1] != m21_time_signature:
-            m21_measure.insert(0, m21_time_signature)
+        else:
+            print(f"idx_measure {idx_measure}")
+            print(f"ts {m21_time_signature}")
+            #print(f"Recurse {self.m21_score.parts[0].recurse().getElementsByClass(m21.meter.TimeSignature)}")
+        #elif self.m21_score.flatten().recurse().getElementsByClass(m21.meter.TimeSignature)[-1] != m21_time_signature:
+        #    m21_measure.insert(0, m21_time_signature)
 
         # Add repetition if necessary
         if gp_measure.header.isRepeatOpen:
@@ -100,18 +112,20 @@ class GuitarProToMusic21Convertor:
                          gp_note: gm.models.Note) -> m21.stream.Voice:
         # Retrieve the duration of the beat
         event_duration = gp_beat.duration.value
+        m21_duration = m21.duration.Duration()
+        m21_duration.quarterLength = 4 / event_duration
         # Add dot if necessary
         if gp_beat.duration.isDotted:
-            event_duration.dots = 1
+            m21_duration.dots = 1
 
         # Check if type of note = normal note
         if gp_note.type.value == 1:
             midi_value = gp_note.realValue
             m21_note = m21.note.Note(midi_value)
-            m21_note.quarterLength = event_duration
+            m21_note.duration = m21_duration
         # If not, is a rest, to handle tie and dead notes
         else:
             m21_note = m21.note.Rest()
-            m21_note.quarterLength = event_duration
+            m21_note.duration = m21_duration
 
         return m21_note

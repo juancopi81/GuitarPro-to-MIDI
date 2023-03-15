@@ -72,5 +72,9 @@ def test_create_m21_note(gp_to_m21_convertor):
     m21_note = gp_to_m21_convertor._create_m21_note(0, gp_beat, gp_note)
     assert type(m21_note) == m21.note.Note
     assert m21_note.nameWithOctave == "E4"
-    assert m21_note.quarterLength == 8
+    assert m21_note.quarterLength == 0.5
     assert m21_note.duration.dots == 0
+
+def test_apply(gp_to_m21_convertor):
+    m21_stream = gp_to_m21_convertor.apply()
+    m21_stream.write("midi", "test_1.midi")
