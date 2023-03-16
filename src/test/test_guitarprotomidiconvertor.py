@@ -78,3 +78,12 @@ def test_create_m21_note(gp_to_m21_convertor):
 def test_apply(gp_to_m21_convertor):
     m21_stream = gp_to_m21_convertor.apply()
     m21_stream.write("midi", "test_1.midi")
+
+
+def test_apply_metallica():
+    test_folder_path = Path.home()/"GuitarPro-to-MIDI/src/test/test_files"
+    gp_serializer = PyGuitarProSerializer()
+    gp_file = gp_serializer.load(test_folder_path/"progmetal.gp3")
+    gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
+    m21_stream = gp_to_m21_convertor.apply()
+    m21_stream.write("midi", "test_progmetal.midi")

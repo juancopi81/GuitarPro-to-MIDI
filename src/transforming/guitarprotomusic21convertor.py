@@ -15,6 +15,7 @@ class GuitarProToMusic21Convertor:
         self.m21_score = self._create_new_m21_score()
         # Create a global metronome for the song
         self.metronome = m21.tempo.MetronomeMark(number=self.metadata["tempo"])
+        self._time_signature = m21.meter.TimeSignature()
 
     def _get_metadata(self) -> dict:
         title = str(self.gp_stream.title)
@@ -25,6 +26,14 @@ class GuitarProToMusic21Convertor:
             "artist": artist,
             "tempo": tempo
         }
+
+    @property
+    def time_signature(self) -> m21.meter.TimeSignature:
+        return self._time_signature
+
+    @time_signature.setter
+    def time_signature(self, m21_time_signature = m21.meter.TimeSignature) -> None:
+        self._time_signature = m21_time_signature
 
     def apply(self) -> m21.stream.Score:
         tracks = self.gp_stream.tracks
@@ -78,19 +87,22 @@ class GuitarProToMusic21Convertor:
         gp_time_signature = gp_measure.timeSignature
         m21_numerator = gp_time_signature.numerator
         m21_denominator = gp_time_signature.denominator.value
+        if gp_time_signature.denominator.isDotted:
+            m21_denominator *= 1.5
+        if m21_numerator == 0:
+            m21_numerator = 1
+        elif m21_denominator == 0:
+            m21_numerator = 1
         m21_time_signature = m21.meter.TimeSignature(f"{m21_numerator}/{m21_denominator}")
+        self.time_signature = m21_time_signature
 
         # If first measure of part, add time signature and tempo
         if idx_measure == 0:
             m21_measure.append(self.metronome)
-            m21_measure.insert(0, m21_time_signature)
+            m21_measure.insert(0, self.time_signature)
         # If time signature is different from last time signature, insert ts to measure
-        else:
-            print(f"idx_measure {idx_measure}")
-            print(f"ts {m21_time_signature}")
-            #print(f"Recurse {self.m21_score.parts[0].recurse().getElementsByClass(m21.meter.TimeSignature)}")
-        #elif self.m21_score.flatten().recurse().getElementsByClass(m21.meter.TimeSignature)[-1] != m21_time_signature:
-        #    m21_measure.insert(0, m21_time_signature)
+        elif self.time_signature.numerator != m21_numerator or self.time_signature.denominator != m21_denominator:
+            m21_measure.insert(0, self.time_signature)
 
         # Add repetition if necessary
         if gp_measure.header.isRepeatOpen:
