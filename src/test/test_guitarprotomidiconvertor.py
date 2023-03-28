@@ -66,10 +66,11 @@ def test_create_new_m21_voice(gp_to_m21_convertor):
 
 def test_create_m21_note(gp_to_m21_convertor):
     gp_song = gp_to_m21_convertor.gp_stream
+    m21_voice = gp_song.tracks[0].measures[0].voices[0]
     gp_beat = gp_song.tracks[0].measures[0].voices[0].beats[0]
     gp_note = gp_beat.notes[0]
     assert type(gp_note) == gm.models.Note
-    m21_note = gp_to_m21_convertor._create_m21_note(0, gp_beat, gp_note)
+    m21_note = gp_to_m21_convertor._create_m21_note(0, gp_beat, gp_note, m21_voice)
     assert type(m21_note) == m21.note.Note
     assert m21_note.nameWithOctave == "E4"
     assert m21_note.quarterLength == 0.5
@@ -83,7 +84,7 @@ def test_apply(gp_to_m21_convertor):
 def test_apply_metallica():
     test_folder_path = Path.home()/"GuitarPro-to-MIDI/src/test/test_files"
     gp_serializer = PyGuitarProSerializer()
-    gp_file = gp_serializer.load(test_folder_path/"progmetal.gp3")
+    gp_file = gp_serializer.load(test_folder_path/"Metallica - Nothing else matters (7).gp3.gp2tokens2gp.gp5")
     gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
     m21_stream = gp_to_m21_convertor.apply()
-    m21_stream.write("midi", "test_progmetal.midi")
+    m21_stream.write("midi", "test_met_3.mid")

@@ -39,7 +39,7 @@ class Music21Serializer(Serializer):
         self.save_format = save_format
 
     def dump(self, m21_stream: Score, save_path: Path) -> None:
-        m21_stream.write(fmt=self.save_format, fp=save_path)
+        m21_stream.write(fmt=self.save_format, fp=save_path, quantizePost=False)
 
     def load(self, load_path: Path) -> Score:
         stream = converter.parse(load_path)

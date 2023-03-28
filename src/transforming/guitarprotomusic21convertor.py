@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import guitarpro as gm
 import music21 as m21
 
@@ -42,19 +44,27 @@ class GuitarProToMusic21Convertor:
             m21_part = self._create_m21_part(idx_track, track)
             # Loop over measure
             for idx_measure, gp_measure in enumerate(track.measures):
+                # Create measure
                 m21_measure = self._create_m21_measure(idx_track, idx_measure, gp_measure)
                 # Loop over voices
                 for idx_voice, gp_voice in enumerate(gp_measure.voices):
+                    # If voice is empty, continue
+                    if gp_voice.isEmpty:
+                        continue
+                    # Create voice
                     m21_voice = self._create_m21_voice(idx_voice, gp_voice)
+                    # Append voice to measure
+                    m21_measure.insert(0, m21_voice)
                     # Loop over beats and notes
                     for idx_beat, gp_beat in enumerate(gp_voice.beats):
+                        # Update the previous_beat_duration for the next beat
+                        offset = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
                         for gp_note in gp_beat.notes:
-                            m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note)
-                            insert_quarter_note = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
-                            m21_voice.insert(insert_quarter_note, m21_note)
-                    m21_measure.insert(idx_voice, m21_voice)
-                m21_part.insert(idx_measure, m21_measure)
-            self.m21_score.insert(idx_track, m21_part)
+                            m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_voice)
+                            m21_note.offset = offset
+                            m21_voice.insert(offset, m21_note)
+                m21_part.append(m21_measure)
+            self.m21_score.append(m21_part)
         return self.m21_score
 
     def _create_new_m21_score(self):
@@ -94,15 +104,16 @@ class GuitarProToMusic21Convertor:
         elif m21_denominator == 0:
             m21_numerator = 1
         m21_time_signature = m21.meter.TimeSignature(f"{m21_numerator}/{m21_denominator}")
-        self.time_signature = m21_time_signature
+        m21_time_signature.priority = -1
 
-        # If first measure of part, add time signature and tempo
         if idx_measure == 0:
             m21_measure.append(self.metronome)
-            m21_measure.insert(0, self.time_signature)
+            m21_measure.timeSignature = m21_time_signature 
+            self.time_signature = m21_time_signature
         # If time signature is different from last time signature, insert ts to measure
         elif self.time_signature.numerator != m21_numerator or self.time_signature.denominator != m21_denominator:
-            m21_measure.insert(0, self.time_signature)
+            m21_measure.timeSignature = m21_time_signature 
+            self.time_signature = m21_time_signature
 
         # Add repetition if necessary
         if gp_measure.header.isRepeatOpen:
@@ -121,23 +132,52 @@ class GuitarProToMusic21Convertor:
     def _create_m21_note(self,
                          idx_beat: int,
                          gp_beat: gm.models.Beat,
-                         gp_note: gm.models.Note) -> m21.stream.Voice:
+                         gp_note: gm.models.Note,
+                         m21_voice: m21.stream.Voice) -> m21.note.Note:
         # Retrieve the duration of the beat
-        event_duration = gp_beat.duration.value
-        m21_duration = m21.duration.Duration()
-        m21_duration.quarterLength = 4 / event_duration
+        gp_duration = gp_beat.duration.value
+        m21_duration_name = m21.duration.typeFromNumDict[float(gp_duration)]
+
         # Add dot if necessary
         if gp_beat.duration.isDotted:
-            m21_duration.dots = 1
+            m21_dots = 1
+        else:
+            m21_dots = 0
 
         # Check if type of note = normal note
         if gp_note.type.value == 1:
             midi_value = gp_note.realValue
-            m21_note = m21.note.Note(midi_value)
-            m21_note.duration = m21_duration
-        # If not, is a rest, to handle tie and dead notes
+            m21_note = m21.note.Note(pitch=midi_value,
+                                     type=m21_duration_name,
+                                     dots=m21_dots)
+
+        # Check if tie note
+        elif gp_note.type.value == 2:
+            midi_value = gp_note.realValue
+            m21_note = m21.note.Note(pitch=midi_value,
+                                     type=m21_duration_name,
+                                     dots=m21_dots)
+            # print(f"{gp_note.realValue} {gp_note.value} {gp_note.string}")
+            # # midi_value = gp_note.realValue
+            # # m21_note = m21.note.Note(midi_value)
+            # # m21_note.duration = m21_duration
+            # # m21_note.tie = m21.tie.Tie("stop")
+            # midi_value = gp_note.realValue
+            # m21_note = m21.note.Note(midi_value)
+            # m21_note.duration = m21_duration
+            # # Since we don't have tie direction information in the PyGuitarPro library,
+            # # we'll use a simple workaround by checking if a note with the same pitch
+            # # already exists in the current voice. If it does, we'll set the previous
+            # # note's tie type to 'start' and the current note's tie type to 'stop'
+            # for element in reversed(m21_voice.elements):
+            #     if isinstance(element, m21.note.Note) and element.pitch == m21_note.pitch:
+            #         element.tie = m21.tie.Tie('start')
+            #         m21_note.tie = m21.tie.Tie('stop')
+            #         break
+            # else:
+            #     m21_note.tie = m21.tie.Tie('stop')
+        # If not, is a rest, to handle dead notes
         else:
-            m21_note = m21.note.Rest()
-            m21_note.duration = m21_duration
+            m21_note = m21.note.Rest(type=m21_duration_name)
 
         return m21_note
