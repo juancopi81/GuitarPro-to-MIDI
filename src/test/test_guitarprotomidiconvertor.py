@@ -78,7 +78,7 @@ def test_create_m21_note(gp_to_m21_convertor):
 
 def test_apply(gp_to_m21_convertor):
     m21_stream = gp_to_m21_convertor.apply()
-    m21_stream.write("midi", "test_1.midi")
+    m21_stream.write("midi", "test_1.mid")
 
 
 def test_apply_metallica():

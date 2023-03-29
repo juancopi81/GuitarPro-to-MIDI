@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import guitarpro as gm
 import music21 as m21
 
@@ -60,7 +58,7 @@ class GuitarProToMusic21Convertor:
                         # Update the previous_beat_duration for the next beat
                         offset = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
                         for gp_note in gp_beat.notes:
-                            m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_voice)
+                            m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_measure)
                             m21_note.offset = offset
                             m21_voice.insert(offset, m21_note)
                 m21_part.append(m21_measure)
@@ -133,10 +131,20 @@ class GuitarProToMusic21Convertor:
                          idx_beat: int,
                          gp_beat: gm.models.Beat,
                          gp_note: gm.models.Note,
-                         m21_voice: m21.stream.Voice) -> m21.note.Note:
+                         m21_measure: m21.stream.Measure) -> m21.note.Note:
         # Retrieve the duration of the beat
         gp_duration = gp_beat.duration.value
         m21_duration_name = m21.duration.typeFromNumDict[float(gp_duration)]
+
+        # Check tempo changes
+        if gp_beat.effect.mixTableChange != None:
+            if gp_beat.effect.mixTableChange.tempo.value != None:
+                new_metronome = m21.tempo.MetronomeMark(number=gp_beat.effect.mixTableChange.tempo.value)
+                for el in m21_measure.recurse():
+                    if "MetronomeMark" in el.classes:
+                        el.activeSite.remove(el)
+                    
+                m21_measure.insert(0, new_metronome)
 
         # Add dot if necessary
         if gp_beat.duration.isDotted:
@@ -178,6 +186,7 @@ class GuitarProToMusic21Convertor:
             #     m21_note.tie = m21.tie.Tie('stop')
         # If not, is a rest, to handle dead notes
         else:
+            print(f"Else {gp_note}")
             m21_note = m21.note.Rest(type=m21_duration_name)
 
         return m21_note
