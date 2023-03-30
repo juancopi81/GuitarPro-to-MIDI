@@ -13,6 +13,8 @@ class GuitarProToMusic21Convertor:
         self.gp_stream = gp_stream
         self.metadata = self._get_metadata()
         self.m21_score = self._create_new_m21_score()
+        # Dictionary to keep track of last note on each string
+        self._last_normal_notes = {}
         # Create a global metronome for the song
         self.metronome = m21.tempo.MetronomeMark(number=self.metadata["tempo"])
         self._time_signature = m21.meter.TimeSignature()
@@ -46,7 +48,6 @@ class GuitarProToMusic21Convertor:
                 m21_measure = self._create_m21_measure(idx_track, idx_measure, gp_measure)
                 # Loop over voices
                 for idx_voice, gp_voice in enumerate(gp_measure.voices):
-                    # If voice is empty, continue
                     if gp_voice.isEmpty:
                         continue
                     # Create voice
@@ -57,10 +58,24 @@ class GuitarProToMusic21Convertor:
                     for idx_beat, gp_beat in enumerate(gp_voice.beats):
                         # Update the previous_beat_duration for the next beat
                         offset = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
-                        for gp_note in gp_beat.notes:
-                            m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_measure)
-                            m21_note.offset = offset
-                            m21_voice.insert(offset, m21_note)
+                        if len(gp_beat.notes) == 0:
+                            m21_duration_name = m21.duration.typeFromNumDict[float(gp_beat.duration.value)]
+                            m21_rest = m21.note.Rest(type=m21_duration_name)
+                            m21_voice.insert(offset, m21_rest)
+                        else:
+                            for gp_note in gp_beat.notes:
+                                m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_measure)
+                                m21_note.offset = offset
+                                m21_voice.insert(offset, m21_note)
+                                # Update last active note on string
+                                if gp_note.type.value == 1:
+                                    self._last_normal_notes = self._update_string_last_normal_note(gp_note, m21_note)
+                                # If note is of type tie, find the last active note on _last_normal_notes dict.
+                                elif gp_note.type.value == 2:
+                                    string_number = gp_note.string
+                                    if string_number in self._last_normal_notes:
+                                        last_normal_note = self._last_normal_notes[string_number]["m21_note"]
+                                        last_normal_note.tie = m21.tie.Tie("start")
                 m21_part.append(m21_measure)
             self.m21_score.append(m21_part)
         return self.m21_score
@@ -143,7 +158,6 @@ class GuitarProToMusic21Convertor:
                 for el in m21_measure.recurse():
                     if "MetronomeMark" in el.classes:
                         el.activeSite.remove(el)
-                    
                 m21_measure.insert(0, new_metronome)
 
         # Add dot if necessary
@@ -153,40 +167,46 @@ class GuitarProToMusic21Convertor:
             m21_dots = 0
 
         # Check if type of note = normal note
-        if gp_note.type.value == 1:
+        if gp_note.type.value == 1 or gp_note.type.value == 2:
             midi_value = gp_note.realValue
             m21_note = m21.note.Note(pitch=midi_value,
                                      type=m21_duration_name,
                                      dots=m21_dots)
-
-        # Check if tie note
-        elif gp_note.type.value == 2:
-            midi_value = gp_note.realValue
-            m21_note = m21.note.Note(pitch=midi_value,
-                                     type=m21_duration_name,
-                                     dots=m21_dots)
-            # print(f"{gp_note.realValue} {gp_note.value} {gp_note.string}")
-            # # midi_value = gp_note.realValue
-            # # m21_note = m21.note.Note(midi_value)
-            # # m21_note.duration = m21_duration
-            # # m21_note.tie = m21.tie.Tie("stop")
-            # midi_value = gp_note.realValue
-            # m21_note = m21.note.Note(midi_value)
-            # m21_note.duration = m21_duration
-            # # Since we don't have tie direction information in the PyGuitarPro library,
-            # # we'll use a simple workaround by checking if a note with the same pitch
-            # # already exists in the current voice. If it does, we'll set the previous
-            # # note's tie type to 'start' and the current note's tie type to 'stop'
-            # for element in reversed(m21_voice.elements):
-            #     if isinstance(element, m21.note.Note) and element.pitch == m21_note.pitch:
-            #         element.tie = m21.tie.Tie('start')
-            #         m21_note.tie = m21.tie.Tie('stop')
-            #         break
-            # else:
-            #     m21_note.tie = m21.tie.Tie('stop')
-        # If not, is a rest, to handle dead notes
+            if gp_note.type.value == 2:
+                m21_note.tie = m21.tie.Tie("stop")
         else:
             print(f"Else {gp_note}")
             m21_note = m21.note.Rest(type=m21_duration_name)
 
         return m21_note
+    
+    def _update_string_last_normal_note(self,
+                                        gp_note: gm.models.Note,
+                                        m21_note: m21.note.Note) -> dict:
+        """Update and returns a dictionary containing the following information for each string:
+            - The associated m21_note
+            - The realValue of that string
+            - Tha value of the string
+        """ 
+        # Get the string number
+        string_number = gp_note.string
+        # Get the real value
+        midi_value = gp_note.realValue
+        # Create the dictionary if it does not exist yet
+        if self._last_normal_notes is None:
+            self._last_normal_notes = {}
+
+        # Update the dictionary
+        self._last_normal_notes[string_number] = {
+            "m21_note": m21_note,
+            "midi_value": midi_value,
+            "string_value": string_number
+        }
+
+        # Return the dictionary
+        return self._last_normal_notes
+
+# gp_file = gm.parse("/home/juancopi81/GuitarPro-to-MIDI/src/test/test_files/Metallica - Nothing else matters (7).gp3.gp2tokens2gp.gp5")
+# gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
+# m21_stream = gp_to_m21_convertor.apply()
+# m21_stream.write("mid", "test_met_105.mid")
