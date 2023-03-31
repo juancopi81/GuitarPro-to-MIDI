@@ -43,7 +43,7 @@ class GuitarProToMusic21Convertor:
         for idx_track, track in enumerate(tracks):
             m21_part = self._create_m21_part(idx_track, track)
             # Loop over measure
-            for idx_measure, gp_measure in enumerate(track.measures[12:13]):
+            for idx_measure, gp_measure in enumerate(track.measures):
                 # Create measure
                 m21_measure = self._create_m21_measure(idx_track, idx_measure, gp_measure)
                 # Loop over voices
@@ -56,7 +56,6 @@ class GuitarProToMusic21Convertor:
                     m21_measure.insert(0, m21_voice)
                     # Loop over beats and notes
                     for idx_beat, gp_beat in enumerate(gp_voice.beats):
-                        print(f"Beat: {idx_beat}")
                         # Update the previous_beat_duration for the next beat
                         offset = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
                         if len(gp_beat.notes) == 0:
@@ -75,34 +74,17 @@ class GuitarProToMusic21Convertor:
                                     string_number = gp_note.string
                                     if string_number in self._last_normal_notes:
                                         last_normal_note = self._last_normal_notes[string_number]["m21_note"]
-                                        last_normal_note.tie = m21.tie.Tie("start")
                                         m21_note.pitch = last_normal_note.pitch
-                                        print(f"Last normal note {last_normal_note}")
-                                        print(f"Last normal note tie {last_normal_note.tie}")
-                                        print(f"Current normal note {m21_note}")
                                         offset_difference = m21_note.offset - last_normal_note.offset
                                         remaining_duration = offset_difference - last_normal_note.duration.quarterLength
-                                        if remaining_duration != 0:
-                                            m21_remaining_note = m21.note.Note()
-                                            m21_remaining_note.pitch = last_normal_note.pitch
-                                            m21_remaining_note.duration.quarterLength = remaining_duration
-                                            m21_remaining_note.tie = m21.tie.Tie("continue")
-                                            remaining_offset = (
-                                                last_normal_note.offset + last_normal_note.duration.quarterLength
-                                            )
-                                            m21_voice.insert(remaining_offset, m21_remaining_note)
-                                            print(f"Inserting remaining '{m21_remaining_note.fullName}'' note with duration '{m21_remaining_note.duration}'")
-                                            print(f"Remaining note tie {m21_remaining_note.tie}")
-                                        m21_note.tie = m21.tie.Tie("stop")
-                                        print(f"m21_note tie {m21_note.tie}")
+                                        last_normal_note.tie = m21.tie.Tie("start")
+                                        last_normal_note.duration.quarterLength += remaining_duration + m21_note.duration.quarterLength
+                                        continue
                                 # Insert note into current voice
-                                print(f"Inserting '{m21_note.fullName}'' note with duration '{m21_note.duration}'")
                                 m21_voice.insert(offset, m21_note)
                 m21_part.append(m21_measure)
             self.m21_score.append(m21_part)
             self.m21_score.show("text")
-            for m21_note in self.m21_score.recurse().notes:
-                print(f"Note {m21_note.fullName}. Tie: {m21_note.tie}")
         return self.m21_score
 
     def _create_new_m21_score(self):
