@@ -41,11 +41,16 @@ class GuitarProToMusic21Convertor:
         tracks = self.gp_stream.tracks
         # Loop over each track of the song object
         for idx_track, track in enumerate(tracks):
+            # Create part and append it to score
             m21_part = self._create_m21_part(idx_track, track)
+            self.m21_score.append(m21_part)
+            # Check if it is a percussion track
+            is_percussion = track.isPercussionTrack
             # Loop over measure
             for idx_measure, gp_measure in enumerate(track.measures):
-                # Create measure
+                # Create measure and append it to part
                 m21_measure = self._create_m21_measure(idx_track, idx_measure, gp_measure)
+                m21_part.append(m21_measure)
                 # Loop over voices
                 for idx_voice, gp_voice in enumerate(gp_measure.voices):
                     if gp_voice.isEmpty:
@@ -64,7 +69,7 @@ class GuitarProToMusic21Convertor:
                             m21_voice.insert(offset, m21_rest)
                         else:
                             for gp_note in gp_beat.notes:
-                                m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_measure)
+                                m21_note = self._create_m21_note(idx_beat, gp_beat, gp_note, m21_measure, is_percussion)
                                 m21_note.offset = offset
                                 # Update last active note on string
                                 if gp_note.type.value == 1:
@@ -82,9 +87,6 @@ class GuitarProToMusic21Convertor:
                                         continue
                                 # Insert note into current voice
                                 m21_voice.insert(offset, m21_note)
-                m21_part.append(m21_measure)
-            self.m21_score.append(m21_part)
-            self.m21_score.show("text")
         return self.m21_score
 
     def _create_new_m21_score(self):
@@ -102,8 +104,14 @@ class GuitarProToMusic21Convertor:
         track_name = track.name
         # Create part and add instrument
         m21_part = m21.stream.Part(id=f"name_{track_name}_{idx_track}")
-        part_inst = m21.instrument.instrumentFromMidiProgram(instrument_id)
-        m21_part.append(part_inst)
+        if track.isPercussionTrack:
+            part_inst = m21.instrument.UnpitchedPercussion()
+            part_inst.midiChannel = 9
+            part_inst.inGMPercMap = False
+        else:
+            part_inst = m21.instrument.instrumentFromMidiProgram(instrument_id)
+        part_inst.priority = -2
+        m21_part.insert(0, part_inst)
         return m21_part
 
     def _create_m21_measure(self,
@@ -153,19 +161,21 @@ class GuitarProToMusic21Convertor:
                          idx_beat: int,
                          gp_beat: gm.models.Beat,
                          gp_note: gm.models.Note,
-                         m21_measure: m21.stream.Measure) -> m21.note.Note:
+                         m21_measure: m21.stream.Measure,
+                         is_percussion: bool) -> m21.note.Note:
         # Retrieve the duration of the beat
         gp_duration = gp_beat.duration.value
         m21_duration_name = m21.duration.typeFromNumDict[float(gp_duration)]
 
         # Check tempo changes
         if gp_beat.effect.mixTableChange != None:
-            if gp_beat.effect.mixTableChange.tempo.value != None:
-                new_metronome = m21.tempo.MetronomeMark(number=gp_beat.effect.mixTableChange.tempo.value)
-                for el in m21_measure.recurse():
-                    if "MetronomeMark" in el.classes:
-                        el.activeSite.remove(el)
-                m21_measure.insert(0, new_metronome)
+            if gp_beat.effect.mixTableChange.tempo != None:
+                if gp_beat.effect.mixTableChange.tempo.value != None:
+                    new_metronome = m21.tempo.MetronomeMark(number=gp_beat.effect.mixTableChange.tempo.value)
+                    for el in m21_measure.recurse():
+                        if "MetronomeMark" in el.classes:
+                            el.activeSite.remove(el)
+                    m21_measure.insert(0, new_metronome)
 
         # Add dot if necessary
         if gp_beat.duration.isDotted:
@@ -173,8 +183,9 @@ class GuitarProToMusic21Convertor:
         else:
             m21_dots = 0
 
-        # Check if type of note = normal note
+        # Check if type of note is normal or tie note
         if gp_note.type.value == 1 or gp_note.type.value == 2:
+            # Use unpitch notes if percussion track
             midi_value = gp_note.realValue
             m21_note = m21.note.Note(pitch=midi_value,
                                      type=m21_duration_name,
@@ -182,6 +193,12 @@ class GuitarProToMusic21Convertor:
         else:
             print(f"Else {gp_note}")
             m21_note = m21.note.Rest(type=m21_duration_name)
+
+        # Add tuplets if neccesary
+        if gp_beat.duration.tuplet != gm.models.Tuplet(enters=1, times=1):
+            tuplet_enters = gp_beat.duration.tuplet.enters
+            tuplet_times = gp_beat.duration.tuplet.times
+            m21_note.duration.appendTuplet(m21.duration.Tuplet(tuplet_enters, tuplet_times))
 
         return m21_note
     
@@ -211,7 +228,7 @@ class GuitarProToMusic21Convertor:
         # Return the dictionary
         return self._last_normal_notes
 
-gp_file = gm.parse("/home/juancopi81/GuitarPro-to-MIDI/src/test/test_files/Antonio Carlos, Jobim - Engano.gp4.gp2tokens2gp.gp5")
+gp_file = gm.parse("/home/juancopi81/GuitarPro-to-MIDI/src/test/test_files/progmetal.gp3")
 gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
 m21_stream = gp_to_m21_convertor.apply()
-m21_stream.write("mid", "test_an_12.mid")
+m21_stream.write("mid", "prog_t.mid")
