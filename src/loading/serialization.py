@@ -23,6 +23,7 @@ class Serializer(ABC):
 class PyGuitarProSerializer(Serializer):
 
     """Saves and loads a GuitarPro file. It's a concrete serializer."""
+
     def dump(self, gp_stream: Song, save_path: Path) -> None:
         gm.write(gp_stream, save_path)
 

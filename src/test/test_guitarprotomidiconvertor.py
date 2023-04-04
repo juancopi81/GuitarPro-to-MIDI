@@ -10,14 +10,16 @@ from src.transforming.guitarprotomusic21convertor import GuitarProToMusic21Conve
 
 @fixture
 def gp_to_m21_convertor():
-    test_folder_path = Path.home()/"GuitarPro-to-MIDI/src/test/test_files"
+    test_folder_path = Path.home() / "GuitarPro-to-MIDI/src/test/test_files"
     gp_serializer = PyGuitarProSerializer()
-    gp_file = gp_serializer.load(test_folder_path/"Antonio Carlos, Jobim - Engano.gp4.gp2tokens2gp.gp5")
+    gp_file = gp_serializer.load(
+        test_folder_path / "Antonio Carlos, Jobim - Engano.gp4.gp2tokens2gp.gp5"
+    )
     gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
     return gp_to_m21_convertor
 
 
-def test_guitarpro_to_music21_convertor_init(gp_to_m21_convertor):    
+def test_guitarpro_to_music21_convertor_init(gp_to_m21_convertor):
     metadata = gp_to_m21_convertor.metadata
     assert type(gp_to_m21_convertor.gp_stream) == gm.models.Song
     assert type(metadata) == dict
@@ -41,7 +43,6 @@ def test_create_new_m21_part(gp_to_m21_convertor):
     m21_part = gp_to_m21_convertor._create_m21_part(0, track)
     assert type(m21_part) == m21.stream.Part
     assert m21_part.getInstrument().instrumentName == "Electric Guitar"
-
 
 
 def test_create_new_m21_measure(gp_to_m21_convertor):
@@ -76,15 +77,18 @@ def test_create_m21_note(gp_to_m21_convertor):
     assert m21_note.quarterLength == 0.5
     assert m21_note.duration.dots == 0
 
+
 def test_apply(gp_to_m21_convertor):
     m21_stream = gp_to_m21_convertor.apply()
     m21_stream.write("midi", "test_1.mid")
 
 
 def test_apply_metallica():
-    test_folder_path = Path.home()/"GuitarPro-to-MIDI/src/test/test_files"
+    test_folder_path = Path.home() / "GuitarPro-to-MIDI/src/test/test_files"
     gp_serializer = PyGuitarProSerializer()
-    gp_file = gp_serializer.load(test_folder_path/"Metallica - Nothing else matters (7).gp3.gp2tokens2gp.gp5")
+    gp_file = gp_serializer.load(
+        test_folder_path / "Metallica - Nothing else matters (7).gp3.gp2tokens2gp.gp5"
+    )
     gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
     m21_stream = gp_to_m21_convertor.apply()
     m21_stream.write("midi", "test_met_3.mid")
