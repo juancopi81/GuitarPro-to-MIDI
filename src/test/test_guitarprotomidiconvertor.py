@@ -92,3 +92,27 @@ def test_apply_metallica():
     gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
     m21_stream = gp_to_m21_convertor.apply()
     m21_stream.write("midi", "test_met_3.mid")
+
+
+def test_calculate_measure_duration_in_ticks():
+    test_folder_path = Path.home() / "GuitarPro-to-MIDI/src/test/test_files"
+    gp_serializer = PyGuitarProSerializer()
+    gp_file = gp_serializer.load(
+        test_folder_path / "Metallica - Nothing else matters (7).gp3.gp2tokens2gp.gp5"
+    )
+    gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
+    ts_1 = m21.meter.TimeSignature("4/4")
+    m1_duration = gp_to_m21_convertor._calculate_measure_duration_in_ticks(ts_1)
+    assert m1_duration == 4 * 960
+    ts_2 = m21.meter.TimeSignature("6/8")
+    m2_duration = gp_to_m21_convertor._calculate_measure_duration_in_ticks(ts_2)
+    assert m2_duration == 6 * 480
+    ts_3 = m21.meter.TimeSignature("3/4")
+    m3_duration = gp_to_m21_convertor._calculate_measure_duration_in_ticks(ts_3)
+    assert m3_duration == 3 * 960
+    ts_4 = m21.meter.TimeSignature("1/4")
+    m4_duration = gp_to_m21_convertor._calculate_measure_duration_in_ticks(ts_4)
+    assert m4_duration == 960
+    ts_5 = m21.meter.TimeSignature("7/32")
+    m5_duration = gp_to_m21_convertor._calculate_measure_duration_in_ticks(ts_5)
+    assert m5_duration == 7 * 120

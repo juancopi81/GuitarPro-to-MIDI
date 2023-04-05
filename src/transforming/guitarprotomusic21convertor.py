@@ -1,3 +1,5 @@
+from typing import Union
+
 import guitarpro as gm
 import music21 as m21
 
@@ -29,7 +31,7 @@ class GuitarProToMusic21Convertor:
         return self._time_signature
 
     @time_signature.setter
-    def time_signature(self, m21_time_signature=m21.meter.TimeSignature) -> None:
+    def time_signature(self, m21_time_signature: m21.meter.TimeSignature) -> None:
         self._time_signature = m21_time_signature
 
     def apply(self) -> m21.stream.Score:
@@ -39,8 +41,6 @@ class GuitarProToMusic21Convertor:
             # Create part and append it to score
             m21_part = self._create_m21_part(idx_track, track)
             self.m21_score.append(m21_part)
-            # Check if it is a percussion track
-            is_percussion = track.isPercussionTrack
             # Loop over measure
             for idx_measure, gp_measure in enumerate(track.measures):
                 # Create measure and append it to part
@@ -61,10 +61,17 @@ class GuitarProToMusic21Convertor:
                         # Update the previous_beat_duration for the next beat
                         offset = gp_beat.startInMeasure / QUARTER_TIME_IN_TICKS
                         if len(gp_beat.notes) == 0:
+                            if gp_beat.duration.isDotted:
+                                m21_dots = 1
+                            else:
+                                m21_dots = 0
                             m21_duration_name = m21.duration.typeFromNumDict[
                                 float(gp_beat.duration.value)
                             ]
-                            m21_rest = m21.note.Rest(type=m21_duration_name)
+                            m21_rest = m21.note.Rest(
+                                type=m21_duration_name, dots=m21_dots
+                            )
+                            m21_rest.offset = offset
                             m21_voice.insert(offset, m21_rest)
                         else:
                             for gp_note in gp_beat.notes:
@@ -73,14 +80,13 @@ class GuitarProToMusic21Convertor:
                                     gp_beat,
                                     gp_note,
                                     m21_measure,
-                                    is_percussion,
                                 )
                                 m21_note.offset = offset
                                 # Update last active note on string
                                 if gp_note.type.value == 1:
                                     self._last_normal_notes = (
                                         self._update_string_last_normal_note(
-                                            gp_note, m21_note
+                                            gp_note, m21_note, idx_measure
                                         )
                                     )
                                 # If note is of type tie, find the last active note on _last_normal_notes dict.
@@ -90,14 +96,23 @@ class GuitarProToMusic21Convertor:
                                         last_normal_note = self._last_normal_notes[
                                             string_number
                                         ]["m21_note"]
+                                        last_normal_measure = self._last_normal_notes[
+                                            string_number
+                                        ]["measure"]
                                         m21_note.pitch = last_normal_note.pitch
-                                        offset_difference = (
-                                            m21_note.offset - last_normal_note.offset
-                                        )
-                                        remaining_duration = (
-                                            offset_difference
-                                            - last_normal_note.duration.quarterLength
-                                        )
+                                        if idx_measure == last_normal_measure:
+                                            offset_difference = (
+                                                m21_note.offset
+                                                - last_normal_note.offset
+                                            )
+                                            # Calculate remaining
+                                            remaining_duration = (
+                                                offset_difference
+                                                - last_normal_note.duration.quarterLength
+                                            )
+                                        else:
+                                            # TODO Substract last_normal_note duration from measure duration
+                                            remaining_duration = 0
                                         last_normal_note.tie = m21.tie.Tie("start")
                                         last_normal_note.duration.quarterLength += (
                                             remaining_duration
@@ -106,6 +121,10 @@ class GuitarProToMusic21Convertor:
                                         continue
                                 # Insert note into current voice
                                 m21_voice.insert(offset, m21_note)
+                        if (len(gp_voice.beats) - 1) == idx_beat:
+                            remaining_rests = self._calculate_remaining_rests(gp_beat)
+                            if remaining_rests != None:
+                                m21_voice.append(remaining_rests)
         return self.m21_score
 
     def _create_new_m21_score(self):
@@ -188,7 +207,6 @@ class GuitarProToMusic21Convertor:
         gp_beat: gm.models.Beat,
         gp_note: gm.models.Note,
         m21_measure: m21.stream.Measure,
-        is_percussion: bool,
     ) -> m21.note.Note:
         # Retrieve the duration of the beat
         gp_duration = gp_beat.duration.value
@@ -213,8 +231,12 @@ class GuitarProToMusic21Convertor:
             m21_dots = 0
 
         # Check if type of note is normal or tie note
-        if gp_note.type.value == 1 or gp_note.type.value == 2:
-            # Use unpitch notes if percussion track
+        if (
+            gp_note.type.value == 1
+            or gp_note.type.value == 2
+            or gp_note.type.value == 3
+        ):
+            # TODO: Solve death notes
             midi_value = gp_note.realValue
             m21_note = m21.note.Note(
                 pitch=midi_value, type=m21_duration_name, dots=m21_dots
@@ -234,7 +256,7 @@ class GuitarProToMusic21Convertor:
         return m21_note
 
     def _update_string_last_normal_note(
-        self, gp_note: gm.models.Note, m21_note: m21.note.Note
+        self, gp_note: gm.models.Note, m21_note: m21.note.Note, measure_number: int
     ) -> dict:
         """Update and returns a dictionary containing the following information for each string:
         - The associated m21_note
@@ -254,10 +276,40 @@ class GuitarProToMusic21Convertor:
             "m21_note": m21_note,
             "midi_value": midi_value,
             "string_value": string_number,
+            "measure": measure_number,
         }
 
         # Return the dictionary
         return self._last_normal_notes
+
+    @staticmethod
+    def _calculate_measure_duration_in_ticks(
+        time_signature: m21.meter.TimeSignature,
+    ) -> int:
+        """Returns the duration in ticks of a mesure, given its time signature.
+        QUARTER_TIME_IN_TICKS = 960
+        """
+        current_numerator = time_signature.numerator
+        current_denominator = time_signature.denominator
+        beat_duration = QUARTER_TIME_IN_TICKS * (4 / current_denominator)
+        return int(beat_duration * current_numerator)
+
+    def _calculate_remaining_rests(
+        self, gp_beat: gm.models.Beat
+    ) -> Union[m21.note.Rest, None]:
+        total_duration_of_beats = gp_beat.startInMeasure + gp_beat.duration.time
+        measure_total_duration = self._calculate_measure_duration_in_ticks(
+            self.time_signature
+        )
+        remaining_beats = measure_total_duration - total_duration_of_beats
+        # If measure is complete, return None
+        if remaining_beats == 0:
+            return None
+
+        # Create a rest that completes the remaining of the measure
+        remaining_duration_quarter_length = remaining_beats / QUARTER_TIME_IN_TICKS
+        remaining_rest = m21.note.Rest(remaining_duration_quarter_length)
+        return remaining_rest
 
 
 gp_file = gm.parse(
@@ -265,4 +317,4 @@ gp_file = gm.parse(
 )
 gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
 m21_stream = gp_to_m21_convertor.apply()
-m21_stream.write("mid", "prog_t.mid")
+m21_stream.write("mid", "prog_t_rests.mid", quantizePost=False)
