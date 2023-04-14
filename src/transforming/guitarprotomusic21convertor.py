@@ -39,13 +39,27 @@ class GuitarProToMusic21Convertor:
         # Loop over each track of the song object
         for idx_track, track in enumerate(tracks):
             # Create part and append it to score
-            m21_part = self._create_m21_part(idx_track, track)
+            instrument_id = track.channel.instrument  # Midi instrument id
+            track_name = track.name
+            is_percussion = track.isPercussionTrack
+            m21_part = self._create_m21_part(
+                idx_track, instrument_id, track_name, is_percussion
+            )
             self.m21_score.append(m21_part)
             # Loop over measure
             for idx_measure, gp_measure in enumerate(track.measures):
                 # Create measure and append it to part
+                # Get time signature of measure
+                gp_time_signature = gp_measure.timeSignature
+                # Check for repetitions
+                is_repeat_open = gp_measure.header.isRepeatOpen
+                repeat_close = gp_measure.header.repeatClose
                 m21_measure = self._create_m21_measure(
-                    idx_track, idx_measure, gp_measure
+                    idx_track,
+                    idx_measure,
+                    gp_time_signature,
+                    is_repeat_open,
+                    repeat_close,
                 )
                 m21_part.append(m21_measure)
                 # Loop over voices
@@ -53,7 +67,7 @@ class GuitarProToMusic21Convertor:
                     if gp_voice.isEmpty:
                         continue
                     # Create voice
-                    m21_voice = self._create_m21_voice(idx_voice, gp_voice)
+                    m21_voice = self._create_m21_voice(idx_voice)
                     # Append voice to measure
                     m21_measure.insert(0, m21_voice)
                     # Loop over beats and notes
@@ -100,6 +114,9 @@ class GuitarProToMusic21Convertor:
                                             string_number
                                         ]["measure"]
                                         m21_note.pitch = last_normal_note.pitch
+                                        print(
+                                            f"Measure {idx_measure} Note: {m21_note.fullName}"
+                                        )
                                         if idx_measure == last_normal_measure:
                                             offset_difference = (
                                                 m21_note.offset
@@ -118,6 +135,12 @@ class GuitarProToMusic21Convertor:
                                             remaining_duration
                                             + m21_note.duration.quarterLength
                                         )
+                                        print(
+                                            f"Last normal duration {last_normal_note.fullName}"
+                                        )
+                                        print(
+                                            f"Duration: {last_normal_note.duration.quarterLength}"
+                                        )
                                         continue
                                 # Insert note into current voice
                                 m21_voice.insert(offset, m21_note)
@@ -125,6 +148,7 @@ class GuitarProToMusic21Convertor:
                             remaining_rests = self._calculate_remaining_rests(gp_beat)
                             if remaining_rests != None:
                                 m21_voice.append(remaining_rests)
+        self.m21_score.show("text")
         return self.m21_score
 
     def _create_new_m21_score(self):
@@ -135,14 +159,11 @@ class GuitarProToMusic21Convertor:
         return new_empty_score
 
     def _create_m21_part(
-        self, idx_track: int, track: gm.models.Track
+        self, idx_track: int, instrument_id: int, track_name: str, is_percussion: bool
     ) -> m21.stream.Part:
-        # Get instrument's MIDI id
-        instrument_id = track.channel.instrument
-        track_name = track.name
         # Create part and add instrument
         m21_part = m21.stream.Part(id=f"name_{track_name}_{idx_track}")
-        if track.isPercussionTrack:
+        if is_percussion:
             part_inst = m21.instrument.UnpitchedPercussion()
             part_inst.midiChannel = 9
             part_inst.inGMPercMap = False
@@ -153,13 +174,16 @@ class GuitarProToMusic21Convertor:
         return m21_part
 
     def _create_m21_measure(
-        self, idx_part: int, idx_measure: int, gp_measure: gm.models.Measure
+        self,
+        idx_part: int,
+        idx_measure: int,
+        gp_time_signature: gm.models.TimeSignature,
+        is_repeat_open: bool,
+        repeat_close: int,
     ) -> m21.stream.Measure:
         # Create a new m21_measure
         m21_measure = m21.stream.Measure(id=f"part_{idx_part}_measure_{idx_measure}")
 
-        # Get time signature of measure
-        gp_time_signature = gp_measure.timeSignature
         m21_numerator = gp_time_signature.numerator
         m21_denominator = gp_time_signature.denominator.value
         if gp_time_signature.denominator.isDotted:
@@ -186,18 +210,16 @@ class GuitarProToMusic21Convertor:
             self.time_signature = m21_time_signature
 
         # Add repetition if necessary
-        if gp_measure.header.isRepeatOpen:
+        if is_repeat_open:
             m21_measure.leftBarline = m21.bar.Repeat(direction="start")
-        if gp_measure.header.repeatClose > 0:
+        if repeat_close > 0:
             m21_measure.rightBarline = m21.bar.Repeat(
-                direction="end", times=gp_measure.header.repeatClose
+                direction="end", times=repeat_close
             )
 
         return m21_measure
 
-    def _create_m21_voice(
-        self, idx_voice: int, gp_voice: gm.models.Voice
-    ) -> m21.stream.Voice:
+    def _create_m21_voice(self, idx_voice: int) -> m21.stream.Voice:
         m21_voice = m21.stream.Voice(id=f"voice_{idx_voice}")
         return m21_voice
 
@@ -313,8 +335,8 @@ class GuitarProToMusic21Convertor:
 
 
 gp_file = gm.parse(
-    "/home/juancopi81/GuitarPro-to-MIDI/src/test/test_files/progmetal.gp3"
+    "/home/juancopi81/GuitarPro-to-MIDI/src/test/test_files/slapbass.gp3"
 )
 gp_to_m21_convertor = GuitarProToMusic21Convertor(gp_file)
 m21_stream = gp_to_m21_convertor.apply()
-m21_stream.write("mid", "prog_t_rests.mid", quantizePost=False)
+m21_stream.write("mid", "slap_1.mid", quantizePost=False)

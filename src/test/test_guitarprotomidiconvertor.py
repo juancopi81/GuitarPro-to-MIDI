@@ -38,9 +38,14 @@ def test_create_new_m21_score(gp_to_m21_convertor):
 def test_create_new_m21_part(gp_to_m21_convertor):
     gp_song = gp_to_m21_convertor.gp_stream
     track = gp_song.tracks[0]
+    instrument_id = track.channel.instrument  # Midi instrument id
+    track_name = track.name
+    is_percussion = track.isPercussionTrack
     assert type(gp_song) == gm.models.Song
     assert type(track) == gm.models.Track
-    m21_part = gp_to_m21_convertor._create_m21_part(0, track)
+    m21_part = gp_to_m21_convertor._create_m21_part(
+        0, instrument_id, track_name, is_percussion
+    )
     assert type(m21_part) == m21.stream.Part
     assert m21_part.getInstrument().instrumentName == "Electric Guitar"
 
@@ -48,8 +53,14 @@ def test_create_new_m21_part(gp_to_m21_convertor):
 def test_create_new_m21_measure(gp_to_m21_convertor):
     gp_song = gp_to_m21_convertor.gp_stream
     gp_measure = gp_song.tracks[0].measures[0]
+    gp_time_signature = gp_measure.timeSignature
+    is_repeat_open = gp_measure.header.isRepeatOpen
+    repeat_close = gp_measure.header.repeatClose
     assert type(gp_measure) == gm.models.Measure
-    m21_measure = gp_to_m21_convertor._create_m21_measure(0, 0, gp_measure)
+    assert type(gp_time_signature) == gm.models.TimeSignature
+    m21_measure = gp_to_m21_convertor._create_m21_measure(
+        0, 0, gp_time_signature, is_repeat_open, repeat_close
+    )
     assert type(m21_measure) == m21.stream.Measure
     assert m21_measure.timeSignature.ratioString == "4/4"
     m21_tempo = m21_measure.recurse().getElementsByClass(m21.tempo.MetronomeMark)[0]
@@ -60,7 +71,7 @@ def test_create_new_m21_voice(gp_to_m21_convertor):
     gp_song = gp_to_m21_convertor.gp_stream
     gp_voice = gp_song.tracks[0].measures[0].voices[0]
     assert type(gp_voice) == gm.models.Voice
-    m21_voice = gp_to_m21_convertor._create_m21_voice(0, gp_voice)
+    m21_voice = gp_to_m21_convertor._create_m21_voice(0)
     assert type(m21_voice) == m21.stream.Voice
     assert m21_voice.id == "voice_0"
 
